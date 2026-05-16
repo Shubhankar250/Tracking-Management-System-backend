@@ -41,7 +41,9 @@ public class SecurityConfiguration {
                 .requestMatchers(
                         "/v3/api-docs/**",
                         "/swagger-ui/**",
-                        "/swagger-ui.html","/traccar/**"
+                        "/swagger-ui.html",
+                        "/traccar/**",
+                        "/error"
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST,
                         "/api/parent/auth/login",

@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -20,7 +21,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
-    public ProblemDetail handleSecurityException(Exception exception) {
+    public ResponseEntity<ProblemDetail> handleSecurityException(Exception exception) {
         ProblemDetail errorDetail = null;
 
         // TODO send this stack trace to an observability tool
@@ -30,27 +31,31 @@ public class GlobalExceptionHandler {
             errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(401), exception.getMessage());
             errorDetail.setProperty("description", "The username or password is incorrect");
 
-            return errorDetail;
+            return problem(HttpStatus.UNAUTHORIZED, errorDetail);
         }
 
         if (exception instanceof AccountStatusException) {
             errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), exception.getMessage());
             errorDetail.setProperty("description", "The account is locked");
+            return problem(HttpStatus.FORBIDDEN, errorDetail);
         }
 
         if (exception instanceof AccessDeniedException) {
             errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), exception.getMessage());
             errorDetail.setProperty("description", "You are not authorized to access this resource");
+            return problem(HttpStatus.FORBIDDEN, errorDetail);
         }
 
         if (exception instanceof SignatureException) {
             errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), exception.getMessage());
             errorDetail.setProperty("description", "The JWT signature is invalid");
+            return problem(HttpStatus.FORBIDDEN, errorDetail);
         }
 
         if (exception instanceof ExpiredJwtException) {
             errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), exception.getMessage());
             errorDetail.setProperty("description", "The JWT token has expired");
+            return problem(HttpStatus.FORBIDDEN, errorDetail);
         }
 
         if (errorDetail == null) {
@@ -58,18 +63,18 @@ public class GlobalExceptionHandler {
             errorDetail.setProperty("description", "Unknown internal server error.");
         }
 
-        return errorDetail;
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, errorDetail);
     }
  // ===== New handler for your POI validation =====
     @ExceptionHandler(IncorrectArgumentException.class)
-    public ProblemDetail handleIncorrectArgumentException(IncorrectArgumentException ex) {
+    public ResponseEntity<ProblemDetail> handleIncorrectArgumentException(IncorrectArgumentException ex) {
         ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(400), ex.getMessage());
         errorDetail.setProperty("description", "Invalid request data: missing or incorrect duration");
-        return errorDetail;
+        return problem(HttpStatus.BAD_REQUEST, errorDetail);
     }
     
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ProblemDetail handleMaxSizeException(MaxUploadSizeExceededException ex) {
+    public ResponseEntity<ProblemDetail> handleMaxSizeException(MaxUploadSizeExceededException ex) {
 
         ProblemDetail errorDetail =
                 ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE,
@@ -78,7 +83,7 @@ public class GlobalExceptionHandler {
         errorDetail.setProperty("description",
                 "Please upload files within allowed size limit");
 
-        return errorDetail;
+        return problem(HttpStatus.PAYLOAD_TOO_LARGE, errorDetail);
     }
     
     @ExceptionHandler(FileSizeExceededException.class)
@@ -89,7 +94,15 @@ public class GlobalExceptionHandler {
         error.put("field", ex.getFieldName());
         error.put("message", ex.getMessage());
 
-        return ResponseEntity.badRequest().body(error);
+        return ResponseEntity.badRequest()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(error);
+    }
+
+    private ResponseEntity<ProblemDetail> problem(HttpStatus status, ProblemDetail errorDetail) {
+        return ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(errorDetail);
     }
 }
 
